@@ -17,16 +17,24 @@ router.post('/', verifyToken, (req, res) => {
         // Create offer object
         const newOffer = {
             id: Date.now().toString(),
-            buyerId: uid,
+            buyerId: uid, // uid is from the authenticated token (the logged-in user making the offer)
             createdAt: new Date().toISOString(),
             status: 'pending', // pending, accepted, rejected
             ...offerData
         };
 
+        // Ensure we don't overwrite buyerId if it was passed in body (though it shouldn't be)
+        newOffer.buyerId = uid;
+
         // Enhance with buyer details (simulated join)
         const buyer = users.get(uid);
         if (buyer) {
             newOffer.buyerName = buyer.name || 'ASU Student';
+        }
+
+        // Validate sellerId is NOT the same as buyerId
+        if (newOffer.sellerId === newOffer.buyerId) {
+             return res.status(400).json({ error: 'You cannot make an offer on your own listing' });
         }
 
         // Store offer
