@@ -1,27 +1,47 @@
 const express = require('express');
 const router = express.Router();
+const Fuse = require('fuse.js');
 const verifyToken = require('../middleware/auth');
 const { listings, offers, users } = require('../data/store');
 
 // Get all listings with filtering and pagination
 router.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 10, category, sortBy, sellerId } = req.query;
+        const { page = 1, limit = 10, category, sortBy, sellerId, q, minPrice, maxPrice } = req.query;
         let allListings = Array.from(listings.values());
 
-        // Filter by category
+        // 1. Search (Fuzzy)
+        if (q) {
+            const fuse = new Fuse(allListings, {
+                keys: ['title', 'description', 'brand', 'category'],
+                threshold: 0.4, // 0.0 is perfect match, 1.0 is match anything
+                distance: 100,
+                includeScore: true
+            });
+            
+            const result = fuse.search(q);
+            allListings = result.map(r => r.item);
+        }
+
+        // 2. Filter by category
         if (category) {
             allListings = allListings.filter(l => l.category === category);
         }
 
-        // Filter by sellerId (for "My Listings")
+        // 3. Filter by sellerId (for "My Listings")
         if (sellerId) {
             allListings = allListings.filter(l => l.sellerId === sellerId);
         }
 
-        // Filter out sold items if not viewing own listings (optional logic, but typically we hide sold items from marketplace)
-        // For simplicity, we'll return everything and let frontend filter if needed, 
-        // OR we can add a query param `excludeSold=true`.
+        // 4. Filter by Price Range
+        if (minPrice) {
+            allListings = allListings.filter(l => l.price >= Number(minPrice));
+        }
+        if (maxPrice) {
+            allListings = allListings.filter(l => l.price <= Number(maxPrice));
+        }
+
+        // 5. Filter out sold items if not viewing own listings
         if (req.query.excludeSold === 'true') {
             allListings = allListings.filter(l => !l.sold);
         }

@@ -53,6 +53,7 @@
     "forwarded": "^0.2.0",
     "fresh": "^2.0.0",
     "function-bind": "^1.1.2",
+    "fuse.js": "^7.1.0",
     "get-intrinsic": "^1.3.0",
     "get-proto": "^1.0.1",
     "get-stream": "^5.2.0",
