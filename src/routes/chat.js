@@ -1,0 +1,155 @@
+const express = require('express');
+const router = express.Router();
+const verifyToken = require('../middleware/auth');
+const { chats, messages, users, listings, offers } = require('../data/store');
+
+// Create or get existing chat
+router.post('/', verifyToken, (req, res) => {
+    try {
+        const { uid } = req.user;
+        const { otherUserId, listingId, offerId } = req.body;
+
+        if (!otherUserId || !listingId) {
+            return res.status(400).json({ error: 'otherUserId and listingId are required' });
+        }
+
+        // Check for existing chat
+        const existingChat = Array.from(chats.values()).find(c => 
+            c.listingId === listingId && 
+            c.participants.includes(uid) && 
+            c.participants.includes(otherUserId)
+        );
+
+        if (existingChat) {
+            return res.json(existingChat);
+        }
+
+        // Create new chat
+        const newChat = {
+            _id: Date.now().toString(),
+            participants: [uid, otherUserId],
+            listingId,
+            offerId: offerId || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastMessage: null
+        };
+
+        chats.set(newChat._id, newChat);
+        res.status(201).json(newChat);
+    } catch (error) {
+        console.error('Create chat error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get all chats for current user
+router.get('/', verifyToken, (req, res) => {
+    try {
+        const { uid } = req.user;
+
+        const userChats = Array.from(chats.values())
+            .filter(c => c.participants.includes(uid))
+            .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+        // Enrich with other user details and listing details
+        const enrichedChats = userChats.map(chat => {
+            const otherUserId = chat.participants.find(p => p !== uid);
+            const otherUser = users.get(otherUserId);
+            const listing = listings.get(chat.listingId);
+            
+            return {
+                ...chat,
+                otherUser: otherUser ? {
+                    id: otherUser.uid,
+                    name: otherUser.name,
+                    photoURL: otherUser.photoURL
+                } : { name: 'Unknown User' },
+                listing: listing ? {
+                    id: listing.id,
+                    title: listing.title,
+                    image: listing.images && listing.images[0]
+                } : null
+            };
+        });
+
+        res.json(enrichedChats);
+    } catch (error) {
+        console.error('Get chats error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get messages for a chat
+router.get('/:chatId/messages', verifyToken, (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { uid } = req.user;
+
+        const chat = chats.get(chatId);
+        if (!chat) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        if (!chat.participants.includes(uid)) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const chatMessages = Array.from(messages.values())
+            .filter(m => m.chatId === chatId)
+            .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+        res.json(chatMessages);
+    } catch (error) {
+        console.error('Get messages error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Send a message
+router.post('/:chatId/messages', verifyToken, (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { uid } = req.user;
+        const { text, image } = req.body;
+
+        const chat = chats.get(chatId);
+        if (!chat) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
+
+        if (!chat.participants.includes(uid)) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const newMessage = {
+            _id: Date.now().toString(), // Use _id for GiftedChat compatibility
+            chatId,
+            text: text || '',
+            image: image || null,
+            createdAt: new Date().toISOString(),
+            user: {
+                _id: uid,
+                name: users.get(uid)?.name || 'User',
+                avatar: users.get(uid)?.photoURL
+            }
+        };
+
+        messages.set(newMessage._id, newMessage);
+
+        // Update chat's last message
+        chat.lastMessage = {
+            text: text ? (text.length > 50 ? text.substring(0, 50) + '...' : text) : 'Sent an image',
+            createdAt: newMessage.createdAt
+        };
+        chat.updatedAt = newMessage.createdAt;
+        chats.set(chatId, chat);
+
+        res.status(201).json(newMessage);
+    } catch (error) {
+        console.error('Send message error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+module.exports = router;
