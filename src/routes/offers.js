@@ -196,7 +196,16 @@ router.get('/listing/:listingId', verifyToken, (req, res) => {
             .filter(offer => offer.items.some(item => item.id.toString() === listingId))
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-        res.json(receivedOffers);
+        // Enhance with dynamic buyer details
+        const enhancedOffers = receivedOffers.map(offer => {
+            const buyer = users.get(offer.buyerId);
+            return {
+                ...offer,
+                buyerName: buyer ? buyer.name : (offer.buyerName || 'Buyer')
+            };
+        });
+
+        res.json(enhancedOffers);
     } catch (error) {
         console.error('Get listing offers error:', error);
         res.status(500).json({ error: 'Internal server error' });

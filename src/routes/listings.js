@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
-const { listings, offers } = require('../data/store');
+const { listings, offers, users } = require('../data/store');
 
 // Get all listings with filtering and pagination
 router.get('/', async (req, res) => {
@@ -36,9 +36,14 @@ router.get('/', async (req, res) => {
                 offer.items && offer.items.some(item => item.id.toString() === listing.id.toString())
             ).length;
             
+            // Enrich with seller info
+            const seller = users.get(listing.sellerId);
+            
             return {
                 ...listing,
-                offerCount
+                offerCount,
+                sellerName: seller ? seller.name : 'Unknown Seller',
+                sellerAvatar: seller ? seller.photoURL : null
             };
         });
 
