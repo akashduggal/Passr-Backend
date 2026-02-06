@@ -16,7 +16,7 @@ router.post('/dev-login', (req, res) => {
   // Only allow in development mode or if explicitly enabled
   // For this project, we'll allow it generally but in production this should be guarded
   
-  const { userId, email, name } = req.body;
+  const { userId, email, name } = req.body || {};
   const uid = userId || 'dev-user-123';
   const userEmail = email || 'dev@asu.edu';
   const userName = name || 'Dev Student';
