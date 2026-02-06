@@ -111,7 +111,7 @@ router.post('/:chatId/messages', verifyToken, (req, res) => {
     try {
         const { chatId } = req.params;
         const { uid } = req.user;
-        const { text, image } = req.body;
+        const { text, image, type, schedule } = req.body;
 
         const chat = chats.get(chatId);
         if (!chat) {
@@ -127,6 +127,8 @@ router.post('/:chatId/messages', verifyToken, (req, res) => {
             chatId,
             text: text || '',
             image: image || null,
+            type: type || 'text',
+            schedule: schedule || null,
             createdAt: new Date().toISOString(),
             user: {
                 _id: uid,
@@ -138,8 +140,23 @@ router.post('/:chatId/messages', verifyToken, (req, res) => {
         messages.set(newMessage._id, newMessage);
 
         // Update chat's last message
+        let lastMsgText = text;
+        if (type === 'schedule') {
+            lastMsgText = '📅 Pickup Scheduled';
+        } else if (type === 'schedule_cancellation') {
+            lastMsgText = '🚫 Pickup Cancelled';
+        } else if (type === 'schedule_acceptance') {
+            lastMsgText = '✅ Pickup Confirmed';
+        } else if (type === 'schedule_rejection') {
+            lastMsgText = '❌ Pickup Declined';
+        } else if (!text && image) {
+            lastMsgText = 'Sent an image';
+        } else if (text) {
+            lastMsgText = text.length > 50 ? text.substring(0, 50) + '...' : text;
+        }
+
         chat.lastMessage = {
-            text: text ? (text.length > 50 ? text.substring(0, 50) + '...' : text) : 'Sent an image',
+            text: lastMsgText,
             createdAt: newMessage.createdAt
         };
         chat.updatedAt = newMessage.createdAt;
