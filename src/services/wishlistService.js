@@ -109,6 +109,25 @@ class WishlistService {
 
     return !!data;
   }
+
+  /**
+   * Get all users who have wishlisted a specific listing
+   * @param {string} listingId 
+   * @returns {Promise<Array<string>>} List of user IDs
+   */
+  async getUsersWhoWishlisted(listingId) {
+    const { data, error } = await supabase
+      .from('wishlist')
+      .select('user_id')
+      .eq('listing_id', listingId);
+
+    if (error) {
+      console.error('Error fetching users who wishlisted:', error);
+      return [];
+    }
+
+    return data.map(item => item.user_id);
+  }
 }
 
 module.exports = new WishlistService();

@@ -231,11 +231,117 @@ const sendItemSoldToOtherNotification = async (recipientId, listing) => {
     await sendPushNotification(recipientId, title, body, payload);
 };
 
+/**
+ * Handles logic for sending price drop notifications to wishlist users
+ */
+const sendPriceDropNotification = async (recipientId, listing, oldPrice, newPrice) => {
+    // 1. Construct Deep Link
+    // Navigate to listing details
+    const listingObj = {
+        id: listing.id,
+        title: listing.title || 'Listing',
+        price: newPrice,
+        image: (listing.images && listing.images.length > 0) ? listing.images[0] : null,
+        sold: false
+    };
+    const deepLinkUrl = createDeepLink(ROUTES.MARKETPLACE.PRODUCT_DETAILS, { product: listingObj });
+
+    // 2. Construct Content
+    const title = 'Price Drop Alert! 📉';
+    const body = `${listing.title} is now $${newPrice.toFixed(0)} (was $${oldPrice.toFixed(0)})`;
+
+    // 3. Construct Payload
+    const payload = {
+        type: 'price_drop',
+        listingId: listing.id,
+        listingTitle: listing.title,
+        listingImage: listingObj.image,
+        oldPrice: oldPrice,
+        newPrice: newPrice,
+        url: deepLinkUrl
+    };
+
+    await sendPushNotification(recipientId, title, body, payload);
+};
+
+/**
+ * Handles logic for sending item sold notifications to wishlist users
+ */
+const sendItemSoldToWishlistNotification = async (recipientId, listing) => {
+    // 1. Construct Deep Link
+    const deepLinkUrl = createDeepLink(ROUTES.MARKETPLACE.PRODUCT_DETAILS, { product: listing });
+
+    // 2. Construct Content
+    const title = 'Item Sold 🔔';
+    const body = `An item in your wishlist (${listing.title}) has been sold.`;
+
+    // 3. Construct Payload
+    const payload = {
+        type: 'item_sold_wishlist',
+        listingId: listing.id,
+        listingTitle: listing.title,
+        listingImage: (listing.images && listing.images.length > 0) ? listing.images[0] : null,
+        url: deepLinkUrl
+    };
+
+    await sendPushNotification(recipientId, title, body, payload);
+};
+
+/**
+ * Handles logic for sending expiration warning to seller
+ */
+const sendExpirationWarningToSeller = async (recipientId, listing, hoursLeft) => {
+    // 1. Construct Deep Link
+    // Navigate to My Listings to potentially renew or lower price
+    const deepLinkUrl = createDeepLink(ROUTES.PROFILE.MY_LISTINGS);
+
+    // 2. Construct Content
+    const title = 'Action Required: Listing Expiring ⏳';
+    const body = `Your listing "${listing.title}" will expire in ${hoursLeft} hours. Renew it or lower the price to sell it faster!`;
+
+    // 3. Construct Payload
+    const payload = {
+        type: 'expiration_warning_seller',
+        listingId: listing.id,
+        listingTitle: listing.title,
+        url: deepLinkUrl
+    };
+
+    await sendPushNotification(recipientId, title, body, payload);
+};
+
+/**
+ * Handles logic for sending expiration warning to wishlist users
+ */
+const sendExpirationWarningToWishlist = async (recipientId, listing, hoursLeft) => {
+     // 1. Construct Deep Link
+     const deepLinkUrl = createDeepLink(ROUTES.MARKETPLACE.PRODUCT_DETAILS, { product: listing });
+
+     // 2. Construct Content
+     const title = 'Last Chance! ⏳';
+     const body = `An item in your wishlist (${listing.title}) is expiring in ${hoursLeft} hours. Don't miss out!`;
+ 
+     // 3. Construct Payload
+     const payload = {
+         type: 'expiration_warning_wishlist',
+         listingId: listing.id,
+         listingTitle: listing.title,
+         listingImage: (listing.images && listing.images.length > 0) ? listing.images[0] : null,
+         url: deepLinkUrl
+     };
+ 
+     await sendPushNotification(recipientId, title, body, payload);
+};
+
 module.exports = {
     sendPushNotification,
     sendChatMessageNotification,
     sendOfferNotification,
     sendItemSoldNotification,
     sendOfferStatusNotification,
-    sendItemSoldToOtherNotification
+    sendItemSoldToOtherNotification,
+    sendPriceDropNotification,
+    sendItemSoldToWishlistNotification,
+    sendExpirationWarningToSeller,
+    sendExpirationWarningToWishlist
 };

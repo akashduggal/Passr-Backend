@@ -10,8 +10,11 @@ const ROUTES = {
         PAST_ORDERS: '/profile/past-orders',
         WISHLIST: '/profile/my-wishlist'
     },
+    MARKETPLACE: {
+        PRODUCT_DETAILS: '/product-detail'
+    },
     DASHBOARD: '/dashboard',
-    LISTING_DETAILS: '/listing-details'
+    LISTING_DETAILS: '/product-detail'
 };
 
 /**

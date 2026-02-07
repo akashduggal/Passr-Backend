@@ -245,6 +245,31 @@ class ListingService {
   }
 
   /**
+   * Get listings expiring within a specific time range
+   * @param {number} startHoursFromNow 
+   * @param {number} endHoursFromNow 
+   * @returns {Promise<Array<Object>>}
+   */
+  async getListingsExpiringInWindow(startHoursFromNow, endHoursFromNow) {
+    const now = new Date();
+    const startTime = new Date(now.getTime() + startHoursFromNow * 60 * 60 * 1000).toISOString();
+    const endTime = new Date(now.getTime() + endHoursFromNow * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from('listings')
+      .select('*')
+      .gt('expires_at', startTime)
+      .lt('expires_at', endTime)
+      .eq('sold', false); // Only active listings
+
+    if (error) {
+      throw new Error(`Error fetching expiring listings: ${error.message}`);
+    }
+
+    return data.map(l => this._toAppModel(l));
+  }
+
+  /**
    * Get expired listings
    * @returns {Promise<Array<Object>>}
    */

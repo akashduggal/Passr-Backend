@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Fuse = require('fuse.js');
+const wishlistService = require('../services/wishlistService');
 const verifyToken = require('../middleware/auth');
 const userService = require('../services/userService');
 const listingService = require('../services/listingService');
@@ -162,11 +163,39 @@ router.put('/:id', verifyToken, async (req, res) => {
         // Perform update
         const updatedListing = await listingService.updateListing(id, updates);
 
-        // Check if item is being marked as sold and notify buyer
+        // Check for Price Drop
+        if (updates.price && listing.price && updates.price < listing.price) {
+            // Find all users who wishlisted this item
+            const wishlistUsers = await wishlistService.getUsersWhoWishlisted(id);
+            
+            // Send notifications
+            wishlistUsers.forEach(userId => {
+                // Don't notify the seller if they wishlisted their own item (edge case)
+                if (userId !== uid) {
+                    notificationService.sendPriceDropNotification(
+                        userId, 
+                        updatedListing, 
+                        listing.price, 
+                        updates.price
+                    ).catch(err => console.error(`Error sending price drop notification to ${userId}:`, err));
+                }
+            });
+        }
+
+        // Check if item is being marked as sold and notify buyer and wishlist users
         if (updates.sold === true && !listing.sold && updates.soldToUserId) {
              // 1. Send Push Notification
              notificationService.sendItemSoldNotification(updates.soldToUserId, updatedListing)
                 .catch(err => console.error('Error sending sold notification:', err));
+
+             // Notify Wishlist Users (excluding buyer and seller)
+             const wishlistUsers = await wishlistService.getUsersWhoWishlisted(id);
+             wishlistUsers.forEach(userId => {
+                 if (userId !== uid && userId !== updates.soldToUserId) {
+                      notificationService.sendItemSoldToWishlistNotification(userId, updatedListing)
+                         .catch(err => console.error(`Error sending sold notification to wishlist user ${userId}:`, err));
+                 }
+             });
 
              // 2. Update the accepted offer status to 'sold'
              // Find offers for this listing
