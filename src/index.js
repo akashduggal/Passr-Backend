@@ -6,6 +6,7 @@ const userRoutes = require('./routes/users');
 const listingRoutes = require('./routes/listings');
 const offerRoutes = require('./routes/offers');
 const chatRoutes = require('./routes/chat');
+const wishlistRoutes = require('./routes/wishlist');
 const uploadRoutes = require('./routes/upload');
 const requestLogger = require('./middleware/requestLogger');
 const listingService = require('./services/listingService');
@@ -30,6 +31,7 @@ app.use('/api/users', userRoutes); // Add user routes under /api/users
 app.use('/api/listings', listingRoutes); // Add listing routes under /api/listings
 app.use('/api/offers', offerRoutes); // Add offer routes under /api/offers
 app.use('/api/chats', chatRoutes); // Add chat routes under /api/chats
+app.use('/api/wishlist', wishlistRoutes); // Add wishlist routes under /api/wishlist
 app.use('/api/upload', uploadRoutes); // Add upload routes under /api/upload
 
 app.get('/', (req, res) => {
