@@ -5,10 +5,10 @@
 const ROUTES = {
     CHAT: '/chat',
     PROFILE: {
-        LISTING_OFFERS: '/profile/listing-offers',
-        MY_LISTINGS: '/profile/my-listings',
-        PAST_ORDERS: '/profile/past-orders',
-        WISHLIST: '/profile/my-wishlist'
+        LISTING_OFFERS: '/profile-listing-offers',
+        MY_LISTINGS: '/profile-my-listings',
+        PAST_ORDERS: '/profile-past-orders',
+        WISHLIST: '/profile-my-wishlist'
     },
     MARKETPLACE: {
         PRODUCT_DETAILS: '/product-detail'
