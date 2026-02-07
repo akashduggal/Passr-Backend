@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Fuse = require('fuse.js');
 const verifyToken = require('../middleware/auth');
-const { listings, offers, users } = require('../data/store');
+const { listings, offers, users, chats, messages } = require('../data/store');
+const notificationService = require('../services/notificationService');
 
 // Get all listings with filtering and pagination
 router.get('/', async (req, res) => {
@@ -122,6 +123,23 @@ router.post('/', verifyToken, (req, res) => {
     }
 });
 
+// Get a single listing by ID
+router.get('/:id', verifyToken, (req, res) => {
+    try {
+        const { id } = req.params;
+        const listing = listings.get(id);
+
+        if (!listing) {
+            return res.status(404).json({ message: 'Listing not found' });
+        }
+
+        res.status(200).json(listing);
+    } catch (error) {
+        console.error('Error fetching listing:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
 // Update a listing
 router.put('/:id', verifyToken, (req, res) => {
     try {
@@ -145,6 +163,46 @@ router.put('/:id', verifyToken, (req, res) => {
             ...updates,
             updatedAt: new Date().toISOString()
         };
+
+        // Check if item is being marked as sold and notify buyer
+        if (updates.sold === true && !listing.sold && updates.soldToUserId) {
+             // 1. Send Push Notification
+             notificationService.sendItemSoldNotification(updates.soldToUserId, updatedListing)
+                .catch(err => console.error('Error sending sold notification:', err));
+
+             // 2. Inject "Item Sold" message into the chat
+             const chat = Array.from(chats.values()).find(c => 
+                c.listingId === id && 
+                c.participants.includes(listing.sellerId) && 
+                c.participants.includes(updates.soldToUserId)
+             );
+
+             if (chat) {
+                const newMessage = {
+                    _id: Date.now().toString(),
+                    chatId: chat._id,
+                    text: '🎉 Item marked as sold',
+                    image: null,
+                    type: 'item_sold',
+                    schedule: null,
+                    createdAt: new Date().toISOString(),
+                    user: {
+                        _id: listing.sellerId, // System message attributed to seller
+                        name: 'System',
+                        avatar: null
+                    }
+                };
+
+                messages.set(newMessage._id, newMessage);
+
+                chat.lastMessage = {
+                    text: '🎉 Item Sold',
+                    createdAt: newMessage.createdAt
+                };
+                chat.updatedAt = newMessage.createdAt;
+                chats.set(chat._id, chat);
+             }
+        }
 
         listings.set(id, updatedListing);
         res.status(200).json(updatedListing);

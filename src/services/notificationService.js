@@ -151,8 +151,34 @@ const sendOfferNotification = async (sellerId, buyerName, amount, itemName, list
     await sendPushNotification(sellerId, title, body, payload);
 };
 
+/**
+ * Handles logic for sending item sold notifications to the buyer
+ */
+const sendItemSoldNotification = async (buyerId, listing) => {
+    // 1. Construct Deep Link
+    // Navigate to Past Orders or the specific order details
+    // For now, maybe just Past Orders
+    const deepLinkUrl = createDeepLink(ROUTES.PROFILE.PAST_ORDERS);
+
+    // 2. Construct Content
+    const title = 'You got the item! 🎉';
+    const body = `You have officially purchased ${listing.title}.`;
+
+    // 3. Construct Payload
+    const payload = {
+        type: 'item_sold',
+        listingId: listing.id,
+        listingTitle: listing.title,
+        listingImage: (listing.images && listing.images.length > 0) ? listing.images[0] : null,
+        url: deepLinkUrl
+    };
+
+    await sendPushNotification(buyerId, title, body, payload);
+};
+
 module.exports = {
     sendPushNotification,
     sendChatMessageNotification,
-    sendOfferNotification
+    sendOfferNotification,
+    sendItemSoldNotification
 };
