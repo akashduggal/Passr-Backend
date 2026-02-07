@@ -41,69 +41,71 @@ app.get('/', (req, res) => {
 });
 
 // Periodic cleanup task for expired listings
-setInterval(async () => {
-  if (!ENABLE_EXPIRED_LISTING_CLEANUP) return;
+if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_CRON_JOBS === 'true') {
+  setInterval(async () => {
+    if (!ENABLE_EXPIRED_LISTING_CLEANUP) return;
 
-  console.log('[Cleanup] Starting expired listings cleanup...');
-  
-  try {
-      // 1. Identify expired listings from DB
-      const expiredListings = await listingService.getExpiredListings();
+    console.log('[Cleanup] Starting expired listings cleanup...');
+    
+    try {
+        // 1. Identify expired listings from DB
+        const expiredListings = await listingService.getExpiredListings();
 
-      if (expiredListings.length > 0) {
-        console.log(`[Cleanup] Found ${expiredListings.length} expired listings:`, expiredListings.map(l => l.id));
-        const s3KeysToDelete = [];
+        if (expiredListings.length > 0) {
+          console.log(`[Cleanup] Found ${expiredListings.length} expired listings:`, expiredListings.map(l => l.id));
+          const s3KeysToDelete = [];
 
-        for (const listing of expiredListings) {
-          // 2. Collect images for S3 deletion
-          if (listing.images && Array.isArray(listing.images)) {
-            listing.images.forEach(imageUrl => {
-              try {
-                 // Extract Key from URL
-                 // Format: https://BUCKET.s3.REGION.amazonaws.com/KEY
-                 const url = new URL(imageUrl);
-                 const key = url.pathname.slice(1);
-                 if (key) s3KeysToDelete.push(key);
-              } catch (e) {
-                 // Ignore invalid URLs
-              }
-            });
+          for (const listing of expiredListings) {
+            // 2. Collect images for S3 deletion
+            if (listing.images && Array.isArray(listing.images)) {
+              listing.images.forEach(imageUrl => {
+                try {
+                   // Extract Key from URL
+                   // Format: https://BUCKET.s3.REGION.amazonaws.com/KEY
+                   const url = new URL(imageUrl);
+                   const key = url.pathname.slice(1);
+                   if (key) s3KeysToDelete.push(key);
+                } catch (e) {
+                   // Ignore invalid URLs
+                }
+              });
+            }
+
+            // 3. Remove associated offers
+            const deletedOffersCount = await offerService.deleteOffersForListing(listing.id);
+            if (deletedOffersCount > 0) console.log(`  - Deleted ${deletedOffersCount} associated offers for listing ${listing.id}`);
+
+            // 4. Remove associated chats and messages (cascaded)
+            const deletedChatsCount = await chatService.deleteChatsForListing(listing.id);
+            if (deletedChatsCount > 0) console.log(`  - Deleted ${deletedChatsCount} associated chats for listing ${listing.id}`);
+
+            // 5. Delete the listing from DB
+            await listingService.deleteListing(listing.id);
           }
 
-          // 3. Remove associated offers
-          const deletedOffersCount = await offerService.deleteOffersForListing(listing.id);
-          if (deletedOffersCount > 0) console.log(`  - Deleted ${deletedOffersCount} associated offers for listing ${listing.id}`);
-
-          // 4. Remove associated chats and messages (cascaded)
-          const deletedChatsCount = await chatService.deleteChatsForListing(listing.id);
-          if (deletedChatsCount > 0) console.log(`  - Deleted ${deletedChatsCount} associated chats for listing ${listing.id}`);
-
-          // 5. Delete the listing from DB
-          await listingService.deleteListing(listing.id);
-        }
-
-        // 6. Delete images from S3
-        if (s3KeysToDelete.length > 0) {
-          try {
-            await s3Client.send(new DeleteObjectsCommand({
-              Bucket: process.env.AWS_BUCKET_NAME,
-              Delete: {
-                Objects: s3KeysToDelete.map(Key => ({ Key })),
-                Quiet: true
-              }
-            }));
-            console.log(`  - Deleted ${s3KeysToDelete.length} images from S3`);
-          } catch (error) {
-            console.error('Error deleting images from S3:', error);
+          // 6. Delete images from S3
+          if (s3KeysToDelete.length > 0) {
+            try {
+              await s3Client.send(new DeleteObjectsCommand({
+                Bucket: process.env.AWS_BUCKET_NAME,
+                Delete: {
+                  Objects: s3KeysToDelete.map(Key => ({ Key })),
+                  Quiet: true
+                }
+              }));
+              console.log(`  - Deleted ${s3KeysToDelete.length} images from S3`);
+            } catch (error) {
+              console.error('Error deleting images from S3:', error);
+            }
           }
+          
+          console.log('[Cleanup] Expired listings cleanup complete.');
         }
-        
-        console.log('[Cleanup] Expired listings cleanup complete.');
-      }
-  } catch (error) {
-      console.error('[Cleanup] Error during cleanup:', error);
-  }
-}, 30 * 1000); // Run every 30 seconds
+    } catch (error) {
+        console.error('[Cleanup] Error during cleanup:', error);
+    }
+  }, 30 * 1000); // Run every 30 seconds
+}
 
 // Periodic check for expiring listings (Warning Notifications)
 setInterval(async () => {
