@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const Fuse = require('fuse.js');
 const verifyToken = require('../middleware/auth');
-const { chats, messages } = require('../data/store');
 const userService = require('../services/userService');
 const listingService = require('../services/listingService');
 const notificationService = require('../services/notificationService');
 const offerService = require('../services/offerService');
+const chatService = require('../services/chatService');
 
 // Get all listings with filtering and pagination
 router.get('/', async (req, res) => {
@@ -168,15 +168,7 @@ router.put('/:id', verifyToken, async (req, res) => {
              notificationService.sendItemSoldNotification(updates.soldToUserId, updatedListing)
                 .catch(err => console.error('Error sending sold notification:', err));
 
-             // 2. Inject "Item Sold" message into the chat
-             // Note: chats are still in-memory for now
-             const chat = Array.from(chats.values()).find(c => 
-                c.listingId === id && 
-                c.participants.includes(listing.sellerId) && 
-                c.participants.includes(updates.soldToUserId)
-             );
-
-             // 3. Update the accepted offer status to 'sold'
+             // 2. Update the accepted offer status to 'sold'
              // Find offers for this listing
              const listingOffers = await offerService.getOffersByListingId(id);
              const acceptedOffer = listingOffers.find(o => 
@@ -189,30 +181,17 @@ router.put('/:id', verifyToken, async (req, res) => {
                  console.log(`Updated offer ${acceptedOffer.id} status to sold`);
              }
 
+             // 3. Inject "Item Sold" message into the chat
+             // Create or get chat to ensure message delivery
+             const chat = await chatService.createChat(id, [listing.sellerId, updates.soldToUserId]);
+
              if (chat) {
-                const newMessage = {
-                    _id: Date.now().toString(),
-                    chatId: chat._id,
-                    text: '🎉 Item marked as sold',
-                    image: null,
-                    type: 'item_sold',
-                    schedule: null,
-                    createdAt: new Date().toISOString(),
-                    user: {
-                        _id: listing.sellerId, // System message attributed to seller
-                        name: 'System',
-                        avatar: null
-                    }
-                };
-
-                messages.set(newMessage._id, newMessage);
-
-                chat.lastMessage = {
-                    text: '🎉 Item Sold',
-                    createdAt: newMessage.createdAt
-                };
-                chat.updatedAt = newMessage.createdAt;
-                chats.set(chat._id, chat);
+                await chatService.sendMessage({
+                    chatId: chat.id,
+                    senderId: listing.sellerId, // System message attributed to seller
+                    content: '🎉 Item marked as sold',
+                    type: 'item_sold'
+                });
              }
         }
 

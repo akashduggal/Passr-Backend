@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
-const { chats, messages } = require('../data/store');
 const userService = require('../services/userService');
 const listingService = require('../services/listingService');
 const notificationService = require('../services/notificationService');
 const offerService = require('../services/offerService');
+const chatService = require('../services/chatService');
 
 // Create a new offer
 router.post('/', verifyToken, async (req, res) => {
@@ -19,10 +19,6 @@ router.post('/', verifyToken, async (req, res) => {
         }
 
         // Validate sellerId is NOT the same as buyerId
-        // Assuming sellerId is passed in body, or we derive it from first item
-        // The original code assumed newOffer.sellerId was set. 
-        // Let's check where sellerId comes from.
-        // Usually offerData contains sellerId.
         if (offerData.sellerId && offerData.sellerId === uid) {
              return res.status(400).json({ error: 'You cannot make an offer on your own listing' });
         }
@@ -73,24 +69,7 @@ router.post('/', verifyToken, async (req, res) => {
                 const sellerId = firstListing.sellerId;
                 
                 // Create or find chat
-                let chat = Array.from(chats.values()).find(c => 
-                    c.listingId === firstListingId && 
-                    c.participants.includes(uid) && 
-                    c.participants.includes(sellerId)
-                );
-
-                if (!chat) {
-                    chat = {
-                        _id: Date.now().toString(),
-                        participants: [uid, sellerId],
-                        listingId: firstListingId,
-                        offerId: newOffer.id,
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        lastMessage: null
-                    };
-                    chats.set(chat._id, chat);
-                }
+                const chat = await chatService.createChat(firstListingId, [uid, sellerId], newOffer.id);
 
                 // Construct the initial message text
                 let text = '';
@@ -108,29 +87,12 @@ router.post('/', verifyToken, async (req, res) => {
                 }
 
                 // Create the message
-                const newMessage = {
-                    _id: Date.now().toString(),
-                    chatId: chat._id,
-                    text: text,
-                    image: null,
-                    type: 'offer',
-                    createdAt: new Date().toISOString(),
-                    user: {
-                        _id: uid,
-                        name: buyer ? buyer.name : 'Buyer',
-                        avatar: buyer ? (buyer.picture || buyer.photoURL) : null
-                    }
-                };
-
-                messages.set(newMessage._id, newMessage);
-
-                // Update chat last message
-                chat.lastMessage = {
-                    text: text.substring(0, 50) + '...',
-                    createdAt: newMessage.createdAt
-                };
-                chat.updatedAt = newMessage.createdAt;
-                chats.set(chat._id, chat);
+                await chatService.sendMessage({
+                    chatId: chat.id, // service returns id and _id
+                    senderId: uid,
+                    content: text,
+                    type: 'offer'
+                });
 
                 // --- SEND PUSH NOTIFICATION TO SELLER ---
                 const buyerName = newOffer.buyerName || 'Someone';
@@ -304,36 +266,17 @@ router.put('/:id/status', verifyToken, async (req, res) => {
             if (offer.items && offer.items.length > 0) {
                 const listingId = offer.items[0].id;
                 
-                const chat = Array.from(chats.values()).find(c => 
-                    c.listingId === listingId && 
-                    c.participants.includes(buyerId) && 
-                    c.participants.includes(sellerId)
-                );
+                const chat = await chatService.createChat(listingId, [buyerId, sellerId]);
 
                 if (chat) {
                     // Create acceptance message
                     const text = "🎉 Offer Accepted! Please schedule a pickup time.";
-                    const newMessage = {
-                        _id: Date.now().toString(),
-                        chatId: chat._id,
-                        text: text,
-                        image: null,
-                        type: 'text', // plain text for now, or 'system'
-                        createdAt: new Date().toISOString(),
-                        user: {
-                            _id: sellerId, // Sent by seller
-                            name: 'Seller', // Should be enriched really
-                        }
-                    };
-                    
-                    messages.set(newMessage._id, newMessage);
-                    
-                    chat.lastMessage = {
-                        text: text,
-                        createdAt: newMessage.createdAt
-                    };
-                    chat.updatedAt = newMessage.createdAt;
-                    chats.set(chat._id, chat);
+                    await chatService.sendMessage({
+                        chatId: chat.id,
+                        senderId: sellerId,
+                        content: text,
+                        type: 'text'
+                    });
 
                     // Send notification to buyer
                     notificationService.sendOfferStatusNotification(

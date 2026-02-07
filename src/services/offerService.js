@@ -131,6 +131,30 @@ class OfferService {
         return count;
     }
 
+    // Delete all offers associated with a listing
+    async deleteOffersForListing(listingId) {
+        // Find offers that contain this listing
+        const { data: offers, error: findError } = await supabase
+            .from('offers')
+            .select('id')
+            .contains('items', JSON.stringify([{ id: listingId }]));
+            
+        if (findError) throw findError;
+        
+        if (!offers || offers.length === 0) return 0;
+        
+        const offerIds = offers.map(o => o.id);
+        
+        const { error: deleteError } = await supabase
+            .from('offers')
+            .delete()
+            .in('id', offerIds);
+            
+        if (deleteError) throw deleteError;
+        
+        return offerIds.length;
+    }
+
     // Helper to check if an offer exists for a listing by a user
     // This is hard with JSONB items array without exact structure match
     // But usually we just want to know if *any* offer exists?

@@ -176,9 +176,42 @@ const sendItemSoldNotification = async (buyerId, listing) => {
     await sendPushNotification(buyerId, title, body, payload);
 };
 
+/**
+ * Handles logic for sending offer status update notifications (accepted/rejected)
+ */
+const sendOfferStatusNotification = async (recipientId, status, itemName, offerId) => {
+    // 1. Construct Deep Link
+    // Navigate to listing offers or chat
+    const deepLinkUrl = createDeepLink(ROUTES.PROFILE.LISTING_OFFERS);
+
+    // 2. Construct Content
+    let title = '';
+    let body = '';
+    
+    if (status === 'accepted') {
+        title = 'Offer Accepted! 🎉';
+        body = `Your offer for ${itemName} has been accepted! Tap to schedule pickup.`;
+    } else if (status === 'rejected') {
+        title = 'Offer Declined';
+        body = `Your offer for ${itemName} was declined.`;
+    } else {
+        return; // Unknown status
+    }
+
+    // 3. Construct Payload
+    const payload = {
+        type: status === 'accepted' ? 'offer_accepted' : 'offer_rejected',
+        offerId: offerId,
+        url: deepLinkUrl
+    };
+
+    await sendPushNotification(recipientId, title, body, payload);
+};
+
 module.exports = {
     sendPushNotification,
     sendChatMessageNotification,
     sendOfferNotification,
-    sendItemSoldNotification
+    sendItemSoldNotification,
+    sendOfferStatusNotification
 };

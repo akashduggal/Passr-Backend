@@ -8,8 +8,9 @@ const offerRoutes = require('./routes/offers');
 const chatRoutes = require('./routes/chat');
 const uploadRoutes = require('./routes/upload');
 const requestLogger = require('./middleware/requestLogger');
-const { offers, chats, messages } = require('./data/store');
 const listingService = require('./services/listingService');
+const offerService = require('./services/offerService');
+const chatService = require('./services/chatService');
 const { DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 const { s3Client } = require('./config/s3');
 const { ENABLE_EXPIRED_LISTING_CLEANUP } = require('./config/featureFlags');
@@ -66,39 +67,12 @@ setInterval(async () => {
           }
 
           // 3. Remove associated offers
-          // Note: Offers are still in-memory for now
-          const associatedOffers = [];
-          for (const [offerId, offer] of offers.entries()) {
-            if (offer.items && offer.items.some(item => item.id.toString() === listing.id.toString())) {
-              associatedOffers.push(offerId);
-            }
-          }
-          associatedOffers.forEach(offerId => offers.delete(offerId));
-          if (associatedOffers.length > 0) console.log(`  - Deleted ${associatedOffers.length} associated offers for listing ${listing.id}`);
+          const deletedOffersCount = await offerService.deleteOffersForListing(listing.id);
+          if (deletedOffersCount > 0) console.log(`  - Deleted ${deletedOffersCount} associated offers for listing ${listing.id}`);
 
-          // 4. Remove associated chats and messages
-          // Note: Chats/Messages are still in-memory for now
-          const associatedChats = [];
-          for (const [chatId, chat] of chats.entries()) {
-            if (chat.listingId.toString() === listing.id.toString()) {
-              associatedChats.push(chatId);
-            }
-          }
-
-          associatedChats.forEach(chatId => {
-            // Remove messages for this chat
-            const chatMessages = [];
-            for (const [msgId, msg] of messages.entries()) {
-              if (msg.chatId === chatId) {
-                chatMessages.push(msgId);
-              }
-            }
-            chatMessages.forEach(msgId => messages.delete(msgId));
-            
-            // Remove the chat
-            chats.delete(chatId);
-          });
-          if (associatedChats.length > 0) console.log(`  - Deleted ${associatedChats.length} associated chats for listing ${listing.id}`);
+          // 4. Remove associated chats and messages (cascaded)
+          const deletedChatsCount = await chatService.deleteChatsForListing(listing.id);
+          if (deletedChatsCount > 0) console.log(`  - Deleted ${deletedChatsCount} associated chats for listing ${listing.id}`);
 
           // 5. Delete the listing from DB
           await listingService.deleteListing(listing.id);
