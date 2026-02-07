@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
 const { chats, messages, users, listings, offers } = require('../data/store');
+const notificationService = require('../services/notificationService');
 
 // Create or get existing chat
 router.post('/', verifyToken, (req, res) => {
@@ -161,6 +162,23 @@ router.post('/:chatId/messages', verifyToken, (req, res) => {
         };
         chat.updatedAt = newMessage.createdAt;
         chats.set(chatId, chat);
+
+        // --- SEND PUSH NOTIFICATION ---
+        // Identify recipient (the participant who is NOT the sender)
+        const recipientId = chat.participants.find(p => p !== uid);
+        const senderName = users.get(uid)?.name || 'User';
+        const listing = listings.get(chat.listingId);
+
+        notificationService.sendChatMessageNotification(
+            recipientId,
+            senderName,
+            text,
+            type,
+            chat,
+            listing,
+            schedule
+        );
+        // -----------------------------
 
         res.status(201).json(newMessage);
     } catch (error) {

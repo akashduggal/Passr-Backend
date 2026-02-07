@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
 const { offers, listings, users, chats, messages } = require('../data/store');
+const notificationService = require('../services/notificationService');
 
 // Create a new offer
-router.post('/', verifyToken, (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
     try {
         const { uid } = req.user;
         const offerData = req.body;
@@ -113,6 +114,19 @@ router.post('/', verifyToken, (req, res) => {
                 };
                 chat.updatedAt = newMessage.createdAt;
                 chats.set(chat._id, chat);
+
+                // --- SEND PUSH NOTIFICATION TO SELLER ---
+                const buyerName = newOffer.buyerName || 'Someone';
+                const itemName = isBundle ? 'your bundle' : (offerData.items[0].title || 'your item');
+                
+                notificationService.sendOfferNotification(
+                    sellerId,
+                    buyerName,
+                    offerData.totalOfferAmount,
+                    itemName,
+                    firstListing,
+                    newOffer.id
+                );
             }
         }
         // -----------------------------------------------------
@@ -167,8 +181,25 @@ router.get('/:id', verifyToken, (req, res) => {
         if (!offer) {
             return res.status(404).json({ error: 'Offer not found' });
         }
+
+        // Enrich with seller info if missing
+        let enrichedOffer = { ...offer };
+        if (offer.items && offer.items.length > 0) {
+            const firstListing = listings.get(offer.items[0].id.toString());
+            if (firstListing) {
+                const seller = users.get(firstListing.sellerId);
+                enrichedOffer.sellerId = firstListing.sellerId;
+                enrichedOffer.sellerName = seller ? seller.name : 'Unknown Seller';
+            }
+        }
         
-        res.json(offer);
+        // Ensure buyer info is present (should be in store, but just in case)
+        if (!enrichedOffer.buyerName && enrichedOffer.buyerId) {
+             const buyer = users.get(enrichedOffer.buyerId);
+             enrichedOffer.buyerName = buyer ? buyer.name : 'Buyer';
+        }
+
+        res.json(enrichedOffer);
     } catch (error) {
         console.error('Get offer error:', error);
         res.status(500).json({ error: 'Internal server error' });
