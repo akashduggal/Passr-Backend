@@ -179,4 +179,32 @@ router.delete('/:id', verifyToken, (req, res) => {
     }
 });
 
+// Manually expire a listing (Test Only)
+router.patch('/:id/expire', verifyToken, (req, res) => {
+    try {
+        const { id } = req.params;
+        const { uid } = req.user;
+
+        const listing = listings.get(id);
+
+        if (!listing) {
+            return res.status(404).json({ message: 'Listing not found' });
+        }
+
+        // Authorization check
+        if (listing.sellerId !== uid) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        // Set expiresAt to 1 second ago so the background job picks it up
+        listing.expiresAt = new Date(Date.now() - 1000).toISOString();
+        listings.set(id, listing);
+
+        res.status(200).json({ message: 'Listing expired successfully. Cleanup job will remove it shortly.', listing });
+    } catch (error) {
+        console.error('Error expiring listing:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
+
 module.exports = router;
