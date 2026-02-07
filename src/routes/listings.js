@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const Fuse = require('fuse.js');
 const verifyToken = require('../middleware/auth');
-const { offers, chats, messages } = require('../data/store');
+const { chats, messages } = require('../data/store');
 const userService = require('../services/userService');
 const listingService = require('../services/listingService');
 const notificationService = require('../services/notificationService');
+const offerService = require('../services/offerService');
 
 // Get all listings with filtering and pagination
 router.get('/', async (req, res) => {
@@ -13,17 +14,6 @@ router.get('/', async (req, res) => {
         const { page = 1, limit = 10, category, sortBy, sellerId, q, minPrice, maxPrice } = req.query;
         
         // Use ListingService to fetch listings with DB filtering
-        // Note: Fuse.js search is best done in memory for small datasets, 
-        // or using Postgres Full Text Search for large ones.
-        // For now, we'll fetch filtered results from DB and then apply Fuse if needed, 
-        // OR fetch all and filter in memory if the dataset is small.
-        // Given the previous implementation loaded all into memory, let's try to push filters to DB.
-        
-        // However, 'q' (search) is tricky with simple DB queries without Full Text Search setup.
-        // Let's implement a hybrid approach:
-        // 1. If 'q' is present, we might need to fetch more and filter in memory (or use ILIKE in service).
-        // 2. Ideally, listingService.getAllListings should handle 'q' using Supabase textSearch if possible, 
-        //    but our service currently doesn't support 'q'.
         
         // Let's fetch all matching basic filters from DB first.
         const dbFilters = {
@@ -35,26 +25,12 @@ router.get('/', async (req, res) => {
             sortBy
         };
 
-        // If searching, we might want to fetch more to fuzzy match.
-        // For MVP/Migration, let's fetch based on filters and then search in memory if 'q' exists.
-        // Warning: Pagination breaks if we filter in memory after fetching a page.
-        // Correct approach: Fetch ALL matching DB filters, then Fuse search, then paginate in memory.
-        // OR: Update ListingService to handle 'q' with ILIKE (simple) or TextSearch (advanced).
-        
-        // Let's stick to the previous behavior: Fetch "all" (or a large batch) and process.
-        // But `getAllListings` in service supports pagination.
-        // If we want to maintain the exact behavior of the previous code (Fuzzy search), 
-        // we should probably fetch all active listings if 'q' is present.
-        
         let allListings;
         if (q) {
              // If searching, ignore pagination in DB query, fetch all candidates
              allListings = await listingService.getAllListings({ ...dbFilters, page: 1, limit: 1000 });
         } else {
-             // If not searching, we can use DB pagination (if we didn't need to enrich with offers first...)
-             // The original code calculated offer counts for ALL listings.
-             // "Calculate offer counts for each listing ... O(N*M)"
-             // We should fetch the page we need.
+             // If not searching, we can use DB pagination
              allListings = await listingService.getAllListings({ ...dbFilters, page, limit });
         }
 
@@ -71,42 +47,7 @@ router.get('/', async (req, res) => {
             allListings = result.map(r => r.item);
         }
 
-        // 2-4. Filters (category, sellerId, price) are handled by DB (dbFilters)
-        // But if we fetched all for 'q', we rely on DB filters to have narrowed it down somewhat,
-        // or we trust the DB returned what we asked for.
-        
-        // 5. Exclude Sold - Handled by DB
-
-        // Calculate offer counts
-        // Note: efficiently we should do this in DB or only for the displayed items.
-        // We'll do it for the current batch `allListings`.
-        const allOffers = Array.from(offers.values());
-        
-        // Fetch sellers
-        const sellerIds = [...new Set(allListings.map(l => l.sellerId))];
-        const sellers = await userService.getUsersByIds(sellerIds);
-        const sellersMap = new Map(sellers.map(s => [s.uid, s]));
-
-        allListings = allListings.map(listing => {
-            const offerCount = allOffers.filter(offer => 
-                offer.items && offer.items.some(item => item.id.toString() === listing.id.toString())
-            ).length;
-            
-            // Enrich with seller info
-            const seller = sellersMap.get(listing.sellerId);
-            
-            return {
-                ...listing,
-                offerCount,
-                sellerName: seller ? seller.name : 'Unknown Seller',
-                sellerAvatar: seller ? (seller.picture || seller.photoURL) : null
-            };
-        });
-
         // Sort - Handled by DB if not searching. 
-        // If searching, Fuse might have messed up sort order (it sorts by relevance).
-        // If 'q' is present, we usually want relevance.
-        // If 'sortBy' is present AND 'q' is present, we might want to re-sort?
         if (q && sortBy) {
              switch (sortBy) {
                 case 'price_asc':
@@ -129,7 +70,26 @@ router.get('/', async (req, res) => {
             paginatedListings = allListings.slice(start, end);
         }
 
-        res.status(200).json(paginatedListings);
+        // Enrich with seller info and offer counts
+        // Optimize: Fetch all unique sellers in one go
+        const sellerIds = [...new Set(paginatedListings.map(l => l.sellerId))];
+        const sellers = await userService.getUsersByIds(sellerIds);
+        const sellersMap = new Map(sellers.map(s => [s.uid, s]));
+
+        // Enrich in parallel
+        const enrichedListings = await Promise.all(paginatedListings.map(async (listing) => {
+            const offerCount = await offerService.getOfferCountForListing(listing.id);
+            const seller = sellersMap.get(listing.sellerId);
+            
+            return {
+                ...listing,
+                offerCount,
+                sellerName: seller ? seller.name : 'Unknown Seller',
+                sellerAvatar: seller ? (seller.picture || seller.photoURL) : null
+            };
+        }));
+
+        res.status(200).json(enrichedListings);
     } catch (error) {
         console.error('Error fetching listings:', error);
         res.status(500).json({ message: 'Internal Server Error' });
@@ -217,16 +177,15 @@ router.put('/:id', verifyToken, async (req, res) => {
              );
 
              // 3. Update the accepted offer status to 'sold'
-             // Note: offers are still in-memory for now
-             const acceptedOffer = Array.from(offers.values()).find(o => 
-                o.listingId === id && 
+             // Find offers for this listing
+             const listingOffers = await offerService.getOffersByListingId(id);
+             const acceptedOffer = listingOffers.find(o => 
                 o.buyerId === updates.soldToUserId &&
                 o.status === 'accepted'
              );
 
              if (acceptedOffer) {
-                 acceptedOffer.status = 'sold';
-                 offers.set(acceptedOffer.id, acceptedOffer);
+                 await offerService.updateOffer(acceptedOffer.id, { status: 'sold' });
                  console.log(`Updated offer ${acceptedOffer.id} status to sold`);
              }
 
