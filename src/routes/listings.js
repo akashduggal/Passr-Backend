@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
         // 1. Search (Fuzzy) - Only if q is provided
         if (q) {
             const fuse = new Fuse(allListings, {
-                keys: ['title', 'description', 'brand', 'category'],
+                keys: ['title', 'description', 'brand', 'category', 'livingCommunity', 'condition'],
                 threshold: 0.4,
                 distance: 100,
                 includeScore: true
