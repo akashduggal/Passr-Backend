@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
     const wishlist = await wishlistService.getWishlist(req.user.uid);
     res.json(wishlist);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -21,12 +21,12 @@ router.post('/', async (req, res) => {
   try {
     const { listingId } = req.body;
     if (!listingId) {
-      return res.status(400).json({ error: 'listingId is required' });
+      return res.status(400).json({ message: 'listingId is required' });
     }
     const result = await wishlistService.addToWishlist(req.user.uid, listingId);
     res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -37,7 +37,7 @@ router.delete('/:listingId', async (req, res) => {
     await wishlistService.removeFromWishlist(req.user.uid, listingId);
     res.status(200).json({ message: 'Removed from wishlist' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -48,7 +48,7 @@ router.get('/check/:listingId', async (req, res) => {
     const isInWishlist = await wishlistService.checkWishlistStatus(req.user.uid, listingId);
     res.json({ isInWishlist });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 

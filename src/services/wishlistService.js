@@ -22,7 +22,7 @@ class WishlistService {
 
     if (error) {
       console.error('Error fetching wishlist:', error);
-      throw new Error('Failed to fetch wishlist');
+      throw new Error(`Failed to fetch wishlist: ${error.message} (${error.code})`);
     }
 
     // Flatten and map to app model
@@ -66,7 +66,7 @@ class WishlistService {
 
     if (error) {
       console.error('Error adding to wishlist:', error);
-      throw new Error('Failed to add to wishlist');
+      throw new Error(`Failed to add to wishlist: ${error.message}`);
     }
 
     return data;
@@ -86,7 +86,7 @@ class WishlistService {
 
     if (error) {
       console.error('Error removing from wishlist:', error);
-      throw new Error('Failed to remove from wishlist');
+      throw new Error(`Failed to remove from wishlist: ${error.message}`);
     }
   }
 
