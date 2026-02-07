@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
-const { chats, messages, listings, offers } = require('../data/store');
+const { chats, messages, offers } = require('../data/store');
 const userService = require('../services/userService');
+const listingService = require('../services/listingService');
 const notificationService = require('../services/notificationService');
 
 // Create or get existing chat
@@ -60,10 +61,17 @@ router.get('/', verifyToken, async (req, res) => {
         const usersMap = new Map(otherUsers.map(u => [u.uid, u]));
 
         // Enrich with other user details and listing details
-        const enrichedChats = userChats.map(chat => {
+        // Note: Promise.all needed for listing fetch
+        const enrichedChats = await Promise.all(userChats.map(async (chat) => {
             const otherUserId = chat.participants.find(p => p !== uid);
             const otherUser = usersMap.get(otherUserId);
-            const listing = listings.get(chat.listingId);
+            
+            let listing = null;
+            try {
+                listing = await listingService.getListingById(chat.listingId);
+            } catch (e) {
+                console.error(`Error fetching listing ${chat.listingId} for chat ${chat._id}:`, e);
+            }
             
             return {
                 ...chat,
@@ -78,7 +86,7 @@ router.get('/', verifyToken, async (req, res) => {
                     image: listing.images && listing.images[0]
                 } : null
             };
-        });
+        }));
 
         res.json(enrichedChats);
     } catch (error) {
@@ -114,7 +122,7 @@ router.get('/:chatId/messages', verifyToken, (req, res) => {
 });
 
 // Send a message
-router.post('/:chatId/messages', verifyToken, (req, res) => {
+router.post('/:chatId/messages', verifyToken, async (req, res) => {
     try {
         const { chatId } = req.params;
         const { uid } = req.user;
@@ -129,6 +137,8 @@ router.post('/:chatId/messages', verifyToken, (req, res) => {
             return res.status(403).json({ error: 'Unauthorized' });
         }
 
+        const sender = await userService.getUserById(uid);
+
         const newMessage = {
             _id: Date.now().toString(), // Use _id for GiftedChat compatibility
             chatId,
@@ -139,8 +149,8 @@ router.post('/:chatId/messages', verifyToken, (req, res) => {
             createdAt: new Date().toISOString(),
             user: {
                 _id: uid,
-                name: users.get(uid)?.name || 'User',
-                avatar: users.get(uid)?.photoURL
+                name: sender?.name || 'User',
+                avatar: sender?.picture || sender?.photoURL
             }
         };
 
@@ -172,8 +182,13 @@ router.post('/:chatId/messages', verifyToken, (req, res) => {
         // --- SEND PUSH NOTIFICATION ---
         // Identify recipient (the participant who is NOT the sender)
         const recipientId = chat.participants.find(p => p !== uid);
-        const senderName = users.get(uid)?.name || 'User';
-        const listing = listings.get(chat.listingId);
+        const senderName = sender?.name || 'User';
+        let listing = null;
+        try {
+            listing = await listingService.getListingById(chat.listingId);
+        } catch (e) {
+             console.error(`Error fetching listing for notification:`, e);
+        }
 
         notificationService.sendChatMessageNotification(
             recipientId,

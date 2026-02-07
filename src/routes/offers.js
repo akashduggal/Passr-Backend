@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
-const { offers, listings, chats, messages } = require('../data/store');
+const { offers, chats, messages } = require('../data/store');
 const userService = require('../services/userService');
+const listingService = require('../services/listingService');
 const notificationService = require('../services/notificationService');
 
 // Create a new offer
@@ -45,7 +46,7 @@ router.post('/', verifyToken, async (req, res) => {
         // Create initial chat message for the offer
         if (offerData.items.length > 0) {
             const firstListingId = offerData.items[0].id.toString();
-            const firstListing = listings.get(firstListingId);
+            const firstListing = await listingService.getListingById(firstListingId);
             
             if (firstListing) {
                 const sellerId = firstListing.sellerId;
@@ -98,11 +99,12 @@ router.post('/', verifyToken, async (req, res) => {
                     chatId: chat._id,
                     text: text,
                     image: null,
+                    type: 'offer',
                     createdAt: new Date().toISOString(),
                     user: {
                         _id: uid,
                         name: buyer ? buyer.name : 'Buyer',
-                        avatar: buyer ? buyer.photoURL : null
+                        avatar: buyer ? (buyer.picture || buyer.photoURL) : null
                     }
                 };
 
@@ -140,7 +142,7 @@ router.post('/', verifyToken, async (req, res) => {
 });
 
 // Get offers for a specific user (as buyer)
-router.get('/my-offers', verifyToken, (req, res) => {
+router.get('/my-offers', verifyToken, async (req, res) => {
     try {
         const { uid } = req.user;
         
@@ -150,21 +152,26 @@ router.get('/my-offers', verifyToken, (req, res) => {
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // Newest first
 
         // Enhance offers with seller name and listing details if possible
-        const enhancedOffers = myOffers.map(offer => {
+        // Note: Promise.all needed for async operations inside map
+        const enhancedOffers = await Promise.all(myOffers.map(async (offer) => {
             // Find first item's listing to get seller info
             if (offer.items && offer.items.length > 0) {
-                const firstListing = listings.get(offer.items[0].id.toString());
-                if (firstListing) {
-                    const seller = users.get(firstListing.sellerId);
-                    return {
-                        ...offer,
-                        sellerId: firstListing.sellerId,
-                        sellerName: seller ? seller.name : 'Unknown Seller'
-                    };
+                try {
+                    const firstListing = await listingService.getListingById(offer.items[0].id.toString());
+                    if (firstListing) {
+                        const seller = await userService.getUserById(firstListing.sellerId);
+                        return {
+                            ...offer,
+                            sellerId: firstListing.sellerId,
+                            sellerName: seller ? seller.name : 'Unknown Seller'
+                        };
+                    }
+                } catch (e) {
+                    console.error('Error fetching listing details for offer:', e);
                 }
             }
             return { ...offer, sellerName: 'Unknown Seller', sellerId: null };
-        });
+        }));
 
         res.json(enhancedOffers);
     } catch (error) {
@@ -174,7 +181,7 @@ router.get('/my-offers', verifyToken, (req, res) => {
 });
 
 // Get a single offer by ID
-router.get('/:id', verifyToken, (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
     try {
         const { id } = req.params;
         const offer = offers.get(id);
@@ -186,17 +193,21 @@ router.get('/:id', verifyToken, (req, res) => {
         // Enrich with seller info if missing
         let enrichedOffer = { ...offer };
         if (offer.items && offer.items.length > 0) {
-            const firstListing = listings.get(offer.items[0].id.toString());
-            if (firstListing) {
-                const seller = users.get(firstListing.sellerId);
-                enrichedOffer.sellerId = firstListing.sellerId;
-                enrichedOffer.sellerName = seller ? seller.name : 'Unknown Seller';
+            try {
+                const firstListing = await listingService.getListingById(offer.items[0].id.toString());
+                if (firstListing) {
+                    const seller = await userService.getUserById(firstListing.sellerId);
+                    enrichedOffer.sellerId = firstListing.sellerId;
+                    enrichedOffer.sellerName = seller ? seller.name : 'Unknown Seller';
+                }
+            } catch (e) {
+                console.error('Error fetching listing details:', e);
             }
         }
         
         // Ensure buyer info is present (should be in store, but just in case)
         if (!enrichedOffer.buyerName && enrichedOffer.buyerId) {
-             const buyer = users.get(enrichedOffer.buyerId);
+             const buyer = await userService.getUserById(enrichedOffer.buyerId);
              enrichedOffer.buyerName = buyer ? buyer.name : 'Buyer';
         }
 
@@ -208,13 +219,13 @@ router.get('/:id', verifyToken, (req, res) => {
 });
 
 // Get offers received for a specific listing (as seller)
-router.get('/listing/:listingId', verifyToken, (req, res) => {
+router.get('/listing/:listingId', verifyToken, async (req, res) => {
     try {
         const { listingId } = req.params;
         const { uid } = req.user;
 
         // Verify the user owns this listing
-        const listing = listings.get(listingId);
+        const listing = await listingService.getListingById(listingId);
         if (!listing) {
             return res.status(404).json({ error: 'Listing not found' });
         }
@@ -229,13 +240,13 @@ router.get('/listing/:listingId', verifyToken, (req, res) => {
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         // Enhance with dynamic buyer details
-        const enhancedOffers = receivedOffers.map(offer => {
-            const buyer = users.get(offer.buyerId);
+        const enhancedOffers = await Promise.all(receivedOffers.map(async (offer) => {
+            const buyer = await userService.getUserById(offer.buyerId);
             return {
                 ...offer,
                 buyerName: buyer ? buyer.name : (offer.buyerName || 'Buyer')
             };
-        });
+        }));
 
         res.json(enhancedOffers);
     } catch (error) {
@@ -245,7 +256,7 @@ router.get('/listing/:listingId', verifyToken, (req, res) => {
 });
 
 // Update offer status (accept/reject)
-router.put('/:id/status', verifyToken, (req, res) => {
+router.put('/:id/status', verifyToken, async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body; // accepted, rejected
@@ -260,7 +271,7 @@ router.put('/:id/status', verifyToken, (req, res) => {
         // For simplicity, we check the first item
         if (offer.items && offer.items.length > 0) {
             const firstListingId = offer.items[0].id.toString();
-            const firstListing = listings.get(firstListingId);
+            const firstListing = await listingService.getListingById(firstListingId);
             
             console.log(`Checking auth for accept offer. UID: ${uid}`);
             console.log(`Listing ID: ${firstListingId}`);
@@ -324,17 +335,19 @@ router.put('/:id/status', verifyToken, (req, res) => {
                  // "Offer Accepted! You can now arrange pickup."
                  const text = "Offer Accepted! You can now arrange pickup.";
                  
+                 const seller = await userService.getUserById(sellerId);
                  const newMessage = {
                     _id: Date.now().toString(),
                     chatId: chat._id,
                     text: text,
                     image: null,
+                    type: 'system',
                     createdAt: new Date().toISOString(),
                     // Sender is Seller
                     user: {
                         _id: sellerId,
-                        name: users.get(sellerId)?.name || 'Seller',
-                        avatar: users.get(sellerId)?.photoURL
+                        name: seller?.name || 'Seller',
+                        avatar: seller?.picture || seller?.photoURL
                     },
                     system: true // Optional marker for UI styling if needed, or just plain text
                  };
