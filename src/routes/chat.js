@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
-const { chats, messages, users, listings, offers } = require('../data/store');
+const { chats, messages, listings, offers } = require('../data/store');
+const userService = require('../services/userService');
 const notificationService = require('../services/notificationService');
 
 // Create or get existing chat
@@ -45,7 +46,7 @@ router.post('/', verifyToken, (req, res) => {
 });
 
 // Get all chats for current user
-router.get('/', verifyToken, (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
     try {
         const { uid } = req.user;
 
@@ -53,10 +54,15 @@ router.get('/', verifyToken, (req, res) => {
             .filter(c => c.participants.includes(uid))
             .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
+        // Get all unique other user IDs
+        const otherUserIds = [...new Set(userChats.map(chat => chat.participants.find(p => p !== uid)).filter(id => id))];
+        const otherUsers = await userService.getUsersByIds(otherUserIds);
+        const usersMap = new Map(otherUsers.map(u => [u.uid, u]));
+
         // Enrich with other user details and listing details
         const enrichedChats = userChats.map(chat => {
             const otherUserId = chat.participants.find(p => p !== uid);
-            const otherUser = users.get(otherUserId);
+            const otherUser = usersMap.get(otherUserId);
             const listing = listings.get(chat.listingId);
             
             return {
@@ -64,7 +70,7 @@ router.get('/', verifyToken, (req, res) => {
                 otherUser: otherUser ? {
                     id: otherUser.uid,
                     name: otherUser.name,
-                    photoURL: otherUser.photoURL
+                    photoURL: otherUser.picture || otherUser.photoURL
                 } : { name: 'Unknown User' },
                 listing: listing ? {
                     id: listing.id,

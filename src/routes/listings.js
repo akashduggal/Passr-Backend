@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Fuse = require('fuse.js');
 const verifyToken = require('../middleware/auth');
-const { listings, offers, users, chats, messages } = require('../data/store');
+const { listings, offers, chats, messages } = require('../data/store');
+const userService = require('../services/userService');
 const notificationService = require('../services/notificationService');
 
 // Get all listings with filtering and pagination
@@ -52,19 +53,24 @@ router.get('/', async (req, res) => {
         // For a prototype in-memory store, this is fine. For production, use DB aggregation.
         const allOffers = Array.from(offers.values());
         
+        // Fetch sellers
+        const sellerIds = [...new Set(allListings.map(l => l.sellerId))];
+        const sellers = await userService.getUsersByIds(sellerIds);
+        const sellersMap = new Map(sellers.map(s => [s.uid, s]));
+
         allListings = allListings.map(listing => {
             const offerCount = allOffers.filter(offer => 
                 offer.items && offer.items.some(item => item.id.toString() === listing.id.toString())
             ).length;
             
             // Enrich with seller info
-            const seller = users.get(listing.sellerId);
+            const seller = sellersMap.get(listing.sellerId);
             
             return {
                 ...listing,
                 offerCount,
                 sellerName: seller ? seller.name : 'Unknown Seller',
-                sellerAvatar: seller ? seller.photoURL : null
+                sellerAvatar: seller ? (seller.picture || seller.photoURL) : null
             };
         });
 

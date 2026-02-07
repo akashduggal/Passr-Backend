@@ -11,6 +11,7 @@ const requestLogger = require('./middleware/requestLogger');
 const { listings, offers, chats, messages } = require('./data/store');
 const { DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 const { s3Client } = require('./config/s3');
+const { ENABLE_EXPIRED_LISTING_CLEANUP } = require('./config/featureFlags');
 
 dotenv.config();
 
@@ -35,6 +36,8 @@ app.get('/', (req, res) => {
 
 // Periodic cleanup task for expired listings
 setInterval(async () => {
+  if (!ENABLE_EXPIRED_LISTING_CLEANUP) return;
+
   console.log('[Cleanup] Starting expired listings cleanup...');
   const now = new Date();
   const expiredListings = [];

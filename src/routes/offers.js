@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
-const { offers, listings, users, chats, messages } = require('../data/store');
+const { offers, listings, chats, messages } = require('../data/store');
+const userService = require('../services/userService');
 const notificationService = require('../services/notificationService');
 
 // Create a new offer
@@ -28,7 +29,7 @@ router.post('/', verifyToken, async (req, res) => {
         newOffer.buyerId = uid;
 
         // Enhance with buyer details (simulated join)
-        const buyer = users.get(uid);
+        const buyer = await userService.getUserById(uid);
         if (buyer) {
             newOffer.buyerName = buyer.name || 'ASU Student';
         }

@@ -1,5 +1,5 @@
 const { Expo } = require('expo-server-sdk');
-const { users } = require('../data/store');
+const userService = require('./userService');
 const { ROUTES, createDeepLink } = require('../constants/clientRoutes');
 
 const expo = new Expo();
@@ -13,7 +13,7 @@ const expo = new Expo();
  */
 const sendPushNotification = async (recipientId, title, body, data) => {
     try {
-        const recipient = users.get(recipientId);
+        const recipient = await userService.getUserById(recipientId);
 
         if (!recipient || !recipient.expoPushToken || !Expo.isExpoPushToken(recipient.expoPushToken)) {
             console.log(`[Push] User ${recipientId} does not have a valid push token.`);
