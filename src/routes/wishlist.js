@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const wishlistService = require('../services/wishlistService');
-const { verifyToken } = require('../middleware/auth');
+const verifyToken = require('../middleware/auth');
 
 // Apply auth middleware to all routes
 router.use(verifyToken);
