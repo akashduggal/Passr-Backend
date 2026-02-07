@@ -171,6 +171,8 @@ router.put('/:id', verifyToken, async (req, res) => {
              // 2. Update the accepted offer status to 'sold'
              // Find offers for this listing
              const listingOffers = await offerService.getOffersByListingId(id);
+             
+             // Handle the winner
              const acceptedOffer = listingOffers.find(o => 
                 o.buyerId === updates.soldToUserId &&
                 o.status === 'accepted'
@@ -179,6 +181,21 @@ router.put('/:id', verifyToken, async (req, res) => {
              if (acceptedOffer) {
                  await offerService.updateOffer(acceptedOffer.id, { status: 'sold' });
                  console.log(`Updated offer ${acceptedOffer.id} status to sold`);
+             }
+
+             // Handle the losers (UX Improvement)
+             const losingOffers = listingOffers.filter(o => 
+                o.buyerId !== updates.soldToUserId && 
+                (o.status === 'pending' || o.status === 'accepted')
+             );
+
+             for (const offer of losingOffers) {
+                 // Update status to rejected
+                 await offerService.updateOffer(offer.id, { status: 'rejected' });
+                 
+                 // Notify buyer
+                 notificationService.sendItemSoldToOtherNotification(offer.buyerId, listing)
+                    .catch(err => console.error(`Error notifying loser ${offer.buyerId}:`, err));
              }
 
              // 3. Inject "Item Sold" message into the chat

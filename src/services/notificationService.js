@@ -208,10 +208,34 @@ const sendOfferStatusNotification = async (recipientId, status, itemName, offerI
     await sendPushNotification(recipientId, title, body, payload);
 };
 
+/**
+ * Handles logic for sending notifications to buyers who didn't get the item
+ */
+const sendItemSoldToOtherNotification = async (recipientId, listing) => {
+    // 1. Construct Deep Link
+    const deepLinkUrl = createDeepLink(ROUTES.PROFILE.LISTING_OFFERS);
+
+    // 2. Construct Content
+    const title = 'Item Sold';
+    const body = `${listing.title || 'Item'} has been sold to another buyer.`;
+
+    // 3. Construct Payload
+    const payload = {
+        type: 'item_sold_other',
+        listingId: listing.id,
+        listingTitle: listing.title,
+        listingImage: (listing.images && listing.images.length > 0) ? listing.images[0] : null,
+        url: deepLinkUrl
+    };
+
+    await sendPushNotification(recipientId, title, body, payload);
+};
+
 module.exports = {
     sendPushNotification,
     sendChatMessageNotification,
     sendOfferNotification,
     sendItemSoldNotification,
-    sendOfferStatusNotification
+    sendOfferStatusNotification,
+    sendItemSoldToOtherNotification
 };
