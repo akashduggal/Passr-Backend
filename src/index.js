@@ -105,40 +105,43 @@ if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_CRON_JOBS === 't
         console.error('[Cleanup] Error during cleanup:', error);
     }
   }, 30 * 1000); // Run every 30 seconds
+
+  // Periodic check for expiring listings (Warning Notifications)
+  setInterval(async () => {
+    console.log('[Expiration Check] Starting expiration warning check...');
+    try {
+      // Check for listings expiring in 24 hours (24 to 25 hours window)
+      const listingsExpiringSoon = await listingService.getListingsExpiringInWindow(24, 25);
+      
+      if (listingsExpiringSoon.length > 0) {
+          console.log(`[Expiration Check] Found ${listingsExpiringSoon.length} listings expiring in 24h.`);
+          
+          for (const listing of listingsExpiringSoon) {
+              // 1. Notify Seller
+              notificationService.sendExpirationWarningToSeller(listing.sellerId, listing, 24)
+                  .catch(err => console.error(`Error notifying seller for listing ${listing.id}:`, err));
+
+              // 2. Notify Wishlist Users
+              const wishlistUsers = await wishlistService.getUsersWhoWishlisted(listing.id);
+              for (const userId of wishlistUsers) {
+                  if (userId !== listing.sellerId) {
+                      notificationService.sendExpirationWarningToWishlist(userId, listing, 24)
+                          .catch(err => console.error(`Error notifying wishlist user ${userId} for listing ${listing.id}:`, err));
+                  }
+              }
+          }
+      }
+    } catch (error) {
+        console.error('[Expiration Check] Error during check:', error);
+    }
+  }, 60 * 60 * 1000); // Run every hour
 }
 
-// Periodic check for expiring listings (Warning Notifications)
-setInterval(async () => {
-  console.log('[Expiration Check] Starting expiration warning check...');
-  try {
-    // Check for listings expiring in 24 hours (24 to 25 hours window)
-    const listingsExpiringSoon = await listingService.getListingsExpiringInWindow(24, 25);
-    
-    if (listingsExpiringSoon.length > 0) {
-        console.log(`[Expiration Check] Found ${listingsExpiringSoon.length} listings expiring in 24h.`);
-        
-        for (const listing of listingsExpiringSoon) {
-            // 1. Notify Seller
-            notificationService.sendExpirationWarningToSeller(listing.sellerId, listing, 24)
-                .catch(err => console.error(`Error notifying seller for listing ${listing.id}:`, err));
-
-            // 2. Notify Wishlist Users
-            const wishlistUsers = await wishlistService.getUsersWhoWishlisted(listing.id);
-            for (const userId of wishlistUsers) {
-                 if (userId !== listing.sellerId) {
-                    notificationService.sendExpirationWarningToWishlist(userId, listing, 24)
-                        .catch(err => console.error(`Error notifying wishlist user ${userId} for listing ${listing.id}:`, err));
-                 }
-            }
-        }
-    }
-  } catch (error) {
-      console.error('[Expiration Check] Error during check:', error);
-  }
-}, 60 * 60 * 1000); // Run every hour
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// Only start the server if running directly (not via Vercel/Serverless)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
 
 module.exports = app;
