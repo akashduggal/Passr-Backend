@@ -44,6 +44,7 @@
     "es-object-atoms": "^1.1.1",
     "escape-html": "^1.0.3",
     "etag": "^1.8.1",
+    "expo-server-sdk": "^5.0.0",
     "express": "^5.2.1",
     "extract-zip": "^2.0.1",
     "fd-slicer": "^1.1.0",
