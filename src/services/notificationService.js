@@ -27,7 +27,7 @@ const sendPushNotification = async (recipientId, title, body, data) => {
             body: body,
             data: data
         };
-
+        console.log("Notificatio Payload :::::: ", notification)
         const chunks = expo.chunkPushNotifications([notification]);
         for (let chunk of chunks) {
             await expo.sendPushNotificationsAsync(chunk);
@@ -147,7 +147,7 @@ const sendOfferNotification = async (sellerId, buyerName, amount, itemName, list
         listingImage: listingObj.image,
         url: deepLinkUrl
     };
-
+    console.log("Payload ::::::::::::::::::::", payload)
     await sendPushNotification(sellerId, title, body, payload);
 };
 
