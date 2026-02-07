@@ -1,4 +1,10 @@
+const { ENABLE_API_LOGGING } = require('../config/featureFlags');
+
 const requestLogger = (req, res, next) => {
+  if (!ENABLE_API_LOGGING) {
+    return next();
+  }
+
   const start = Date.now();
   const timestamp = new Date().toISOString();
 

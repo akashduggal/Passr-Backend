@@ -1,8 +1,11 @@
 require('dotenv').config();
 
-const featureFlags = {
-  // Default to false unless explicitly set to 'true'
-  ENABLE_EXPIRED_LISTING_CLEANUP: process.env.ENABLE_EXPIRED_LISTING_CLEANUP === 'true',
-};
+module.exports = {
+    // Feature: Cleanup expired listings
+    // Default: false (Safety first)
+    ENABLE_EXPIRED_LISTING_CLEANUP: true,
 
-module.exports = featureFlags;
+    // Feature: Log API requests and responses
+    // Default: true (Helpful for debugging)
+    ENABLE_API_LOGGING: true
+};
