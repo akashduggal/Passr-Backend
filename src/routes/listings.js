@@ -99,10 +99,15 @@ router.post('/', verifyToken, (req, res) => {
         const { uid } = req.user;
         const listingData = req.body;
 
+        // Default expiry: 5 minutes for testing (usually 30 days)
+        // const EXPIRY_DURATION_MS = 5 * 60 * 1000; 
+        const EXPIRY_DURATION_MS = 1 * 24 * 60 * 60 * 1000; // 1 days
+
         const newListing = {
             id: Date.now().toString(), // Simple string ID
             sellerId: uid,
             postedAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + EXPIRY_DURATION_MS).toISOString(),
             sold: false,
             ...listingData
         };
