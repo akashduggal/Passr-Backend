@@ -177,6 +177,19 @@ router.put('/:id', verifyToken, (req, res) => {
                 c.participants.includes(updates.soldToUserId)
              );
 
+             // 3. Update the accepted offer status to 'sold'
+             const acceptedOffer = Array.from(offers.values()).find(o => 
+                o.listingId === id && 
+                o.buyerId === updates.soldToUserId &&
+                o.status === 'accepted'
+             );
+
+             if (acceptedOffer) {
+                 acceptedOffer.status = 'sold';
+                 offers.set(acceptedOffer.id, acceptedOffer);
+                 console.log(`Updated offer ${acceptedOffer.id} status to sold`);
+             }
+
              if (chat) {
                 const newMessage = {
                     _id: Date.now().toString(),
