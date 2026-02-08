@@ -1,6 +1,7 @@
 const { Expo } = require('expo-server-sdk');
 const userService = require('./userService');
 const { ROUTES, createDeepLink } = require('../constants/clientRoutes');
+const supabase = require('../config/supabase');
 
 const expo = new Expo();
 
@@ -33,6 +34,28 @@ const sendPushNotification = async (recipientId, title, body, data) => {
             await expo.sendPushNotificationsAsync(chunk);
         }
         console.log(`[Push] Sent notification to ${recipientId}: ${title}`);
+
+        // Persist notification to Supabase
+        try {
+            const { error } = await supabase
+                .from('notifications')
+                .insert({
+                    recipient_id: recipientId,
+                    title: title,
+                    body: body,
+                    data: data,
+                    read: false,
+                    type: data?.type || 'general',
+                    created_at: new Date().toISOString()
+                });
+            
+            if (error) {
+                console.error('[Push] Error saving notification to DB:', error);
+            }
+        } catch (dbError) {
+            console.error('[Push] Error saving notification to DB:', dbError);
+        }
+
     } catch (error) {
         console.error('[Push] Error sending notification:', error);
     }
