@@ -116,7 +116,8 @@ async function generateListings() {
           images: [coverImage],
           status: 'active',
           urgent: Math.random() < 0.2, // 20% chance of being urgent
-          posted_at: new Date().toISOString()
+          posted_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Expires in 30 days
         };
 
         if (category === 'Tickets') {
