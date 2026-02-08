@@ -75,6 +75,15 @@ async function clearData() {
       
     if (listingsError) throw new Error(`Error clearing listings: ${listingsError.message}`);
 
+    // 6. Clear notifications
+    console.log('Clearing notifications...');
+    const { error: notificationsError } = await supabase
+      .from('notifications')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000');
+      
+    if (notificationsError) throw new Error(`Error clearing notifications: ${notificationsError.message}`);
+
     console.log('✅ Data cleanup complete! Users table preserved.');
 
   } catch (error) {
