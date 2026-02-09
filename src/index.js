@@ -9,6 +9,7 @@ const chatRoutes = require('./routes/chat');
 const wishlistRoutes = require('./routes/wishlist');
 const uploadRoutes = require('./routes/upload');
 const notificationRoutes = require('./routes/notifications');
+const supportRoutes = require('./routes/support');
 const requestLogger = require('./middleware/requestLogger');
 const listingService = require('./services/listingService');
 const offerService = require('./services/offerService');
@@ -37,6 +38,7 @@ app.use('/api/chats', chatRoutes); // Add chat routes under /api/chats
 app.use('/api/wishlist', wishlistRoutes); // Add wishlist routes under /api/wishlist
 app.use('/api/upload', uploadRoutes); // Add upload routes under /api/upload
 app.use('/api/notifications', notificationRoutes); // Add notification routes under /api/notifications
+app.use('/api/support', supportRoutes); // Add support routes under /api/support
 
 app.get('/', (req, res) => {
   res.send('Passr Backend is running');
