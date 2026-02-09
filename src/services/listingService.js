@@ -122,6 +122,10 @@ class ListingService {
     if (filters.excludeSold) {
         query = query.eq('sold', false);
     }
+
+    if (filters.livingCommunities && filters.livingCommunities.length > 0) {
+        query = query.in('living_community', filters.livingCommunities);
+    }
     
     // Sort
     if (filters.sortBy) {

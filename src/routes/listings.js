@@ -12,7 +12,7 @@ const chatService = require('../services/chatService');
 // Get all listings with filtering and pagination
 router.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 10, category, sortBy, sellerId, q, minPrice, maxPrice } = req.query;
+        const { page = 1, limit = 10, category, sortBy, sellerId, q, minPrice, maxPrice, livingCommunities } = req.query;
         
         // Use ListingService to fetch listings with DB filtering
         
@@ -23,7 +23,8 @@ router.get('/', async (req, res) => {
             minPrice,
             maxPrice,
             excludeSold: req.query.excludeSold === 'true',
-            sortBy
+            sortBy,
+            livingCommunities: livingCommunities ? livingCommunities.split(',') : null
         };
 
         let allListings;
