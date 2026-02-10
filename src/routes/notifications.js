@@ -16,6 +16,7 @@ router.get('/', verifyToken, async (req, res) => {
             .from('notifications')
             .select('*')
             .eq('recipient_id', uid)
+            .eq('is_deleted', false)
             .order('created_at', { ascending: false });
             
         if (error) throw error;
@@ -77,7 +78,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
     try {
         const { error } = await supabase
             .from('notifications')
-            .delete()
+            .update({ is_deleted: true })
             .eq('id', id)
             .eq('recipient_id', uid); // Security check
             
