@@ -1,5 +1,9 @@
 const express = require('express');
 const router = express.Router();
+
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'upload' });
+});
 const { PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const { v4: uuidv4 } = require('uuid');

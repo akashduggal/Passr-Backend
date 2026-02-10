@@ -19,11 +19,52 @@ const notificationService = require('./services/notificationService');
 const { DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 const { s3Client } = require('./config/s3');
 const { ENABLE_EXPIRED_LISTING_CLEANUP } = require('./config/featureFlags');
+const got = require('got');
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+async function checkServicesHealth(port) {
+  const baseUrl = `http://localhost:${port}`;
+  const endpoints = [
+    '/health',
+    '/auth/health',
+    '/api/users/health',
+    '/api/listings/health',
+    '/api/offers/health',
+    '/api/chats/health',
+    '/api/wishlist/health',
+    '/api/upload/health',
+    '/api/notifications/health',
+    '/api/support/health'
+  ];
+
+  console.log('\n--- Starting Service Health Checks ---');
+  
+  const results = await Promise.all(endpoints.map(async (endpoint) => {
+    try {
+      const response = await got(`${baseUrl}${endpoint}`, { 
+        responseType: 'json',
+        retry: 0,
+        timeout: 2000 
+      });
+      return { endpoint, status: 'ok', data: response.body };
+    } catch (error) {
+      return { endpoint, status: 'error', error: error.message };
+    }
+  }));
+
+  results.forEach(({ endpoint, status, error }) => {
+    if (status === 'ok') {
+      console.log(`✅ ${endpoint.padEnd(30)} : OK`);
+    } else {
+      console.error(`❌ ${endpoint.padEnd(30)} : FAILED (${error})`);
+    }
+  });
+  console.log('--- Health Checks Completed ---\n');
+}
 
 app.use(cors());
 app.use(express.json());
@@ -42,6 +83,10 @@ app.use('/api/support', supportRoutes); // Add support routes under /api/support
 
 app.get('/', (req, res) => {
   res.send('Passr Backend is running');
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Periodic cleanup task for expired listings
@@ -143,8 +188,9 @@ if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_CRON_JOBS === 't
 
 // Only start the server if running directly (not via Vercel/Serverless)
 if (require.main === module) {
-  app.listen(PORT, () => {
+  app.listen(PORT, async () => {
     console.log(`Server is running on port ${PORT}`);
+    await checkServicesHealth(PORT);
   });
 }
 

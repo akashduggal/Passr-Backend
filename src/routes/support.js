@@ -1,5 +1,9 @@
 const express = require('express');
 const router = express.Router();
+
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'support' });
+});
 const supportService = require('../services/supportService');
 const authMiddleware = require('../middleware/auth');
 

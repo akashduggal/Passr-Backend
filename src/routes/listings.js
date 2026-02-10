@@ -1,5 +1,9 @@
 const express = require('express');
 const router = express.Router();
+
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'listings' });
+});
 const Fuse = require('fuse.js');
 const wishlistService = require('../services/wishlistService');
 const verifyToken = require('../middleware/auth');
