@@ -69,4 +69,25 @@ router.patch('/read-all', verifyToken, async (req, res) => {
     }
 });
 
+// Delete notification
+router.delete('/:id', verifyToken, async (req, res) => {
+    const { id } = req.params;
+    const { uid } = req.user;
+    
+    try {
+        const { error } = await supabase
+            .from('notifications')
+            .delete()
+            .eq('id', id)
+            .eq('recipient_id', uid); // Security check
+            
+        if (error) throw error;
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting notification:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;
