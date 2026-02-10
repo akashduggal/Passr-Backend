@@ -8,6 +8,7 @@ class UserService {
       last_seen, 
       updated_at, 
       expo_push_token, 
+      active_chat_id,
       ...rest 
     } = dbUser;
 
@@ -15,7 +16,8 @@ class UserService {
       ...rest,
       lastSeen: last_seen,
       updatedAt: updated_at,
-      expoPushToken: expo_push_token
+      expoPushToken: expo_push_token,
+      activeChatId: active_chat_id
     };
   }
 
@@ -25,6 +27,7 @@ class UserService {
       lastSeen, 
       updatedAt, 
       expoPushToken, 
+      activeChatId,
       ...rest 
     } = appUser;
 
@@ -32,6 +35,7 @@ class UserService {
     if (lastSeen !== undefined) dbUser.last_seen = lastSeen;
     if (updatedAt !== undefined) dbUser.updated_at = updatedAt;
     if (expoPushToken !== undefined) dbUser.expo_push_token = expoPushToken;
+    if (activeChatId !== undefined) dbUser.active_chat_id = activeChatId;
 
     return dbUser;
   }
@@ -155,6 +159,18 @@ class UserService {
     }
 
     return true;
+  }
+
+  async updateActiveChat(uid, chatId) {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ active_chat_id: chatId })
+      .eq('uid', uid)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return this._toAppModel(data);
   }
 }
 

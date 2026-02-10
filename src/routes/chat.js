@@ -10,6 +10,20 @@ const userService = require('../services/userService');
 const listingService = require('../services/listingService');
 const notificationService = require('../services/notificationService');
 
+// Update presence
+router.post('/presence', verifyToken, async (req, res) => {
+    try {
+        const { uid } = req.user;
+        const { activeChatId } = req.body; // can be null
+        
+        await userService.updateActiveChat(uid, activeChatId);
+        res.status(200).json({ message: 'Presence updated' });
+    } catch (error) {
+        console.error('Update presence error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Create or get existing chat
 router.post('/', verifyToken, async (req, res) => {
     try {
@@ -154,27 +168,30 @@ router.post('/:chatId/messages', verifyToken, async (req, res) => {
 
         // --- SEND PUSH NOTIFICATION ---
         const recipientId = chat.participants.find(p => p !== uid);
-        const senderName = sender?.name || 'User';
-        let listing = null;
-        try {
-            listing = await listingService.getListingById(chat.listingId);
-        } catch (e) {
-             console.error(`Error fetching listing for notification:`, e);
-        }
-
-        // Notification service expects raw params, not objects usually, but let's check signature
-        // notificationService.sendChatMessageNotification(recipientId, senderName, text, type, chat, listing, schedule);
-        // We can pass the enriched message or just the params. The original code passed params.
         
-        notificationService.sendChatMessageNotification(
-            recipientId,
-            senderName,
-            text,
-            type,
-            chat,
-            listing,
-            schedule
-        );
+        // Check if recipient is currently in the chat
+        const recipient = await userService.getUserById(recipientId);
+        const isRecipientInChat = recipient?.activeChatId === chatId;
+
+        if (!isRecipientInChat) {
+            const senderName = sender?.name || 'User';
+            let listing = null;
+            try {
+                listing = await listingService.getListingById(chat.listingId);
+            } catch (e) {
+                 console.error(`Error fetching listing for notification:`, e);
+            }
+            
+            notificationService.sendChatMessageNotification(
+                recipientId,
+                senderName,
+                text,
+                type,
+                chat,
+                listing,
+                schedule
+            );
+        }
         // -----------------------------
 
         res.status(201).json(responseMessage);
