@@ -96,7 +96,7 @@ async function generateListings() {
         console.log(`  Generating listings for ${category}...`);
         const data = SAMPLE_DATA[category];
         
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < 1; i++) {
           const title = data.titles[i] || `${category} Item ${i + 1}`;
         const brand = data.brands[Math.floor(Math.random() * data.brands.length)];
         const condition = CONDITIONS[Math.floor(Math.random() * CONDITIONS.length)];
@@ -150,6 +150,49 @@ async function generateListings() {
         } else {
           console.log(`✅ Successfully generated ${listings.length} listings for user ${userId}!`);
         }
+      }
+    }
+
+    // Generate Analytics Events
+    console.log('\nGenerating Analytics Events (Views)...');
+    const { data: allListings } = await supabase.from('listings').select('id, category, price');
+    
+    if (allListings && allListings.length > 0) {
+      const events = [];
+      // Generate random views for random listings
+      allListings.forEach(listing => {
+        // 50% chance to have views
+        if (Math.random() > 0.5) {
+          const viewCount = Math.floor(Math.random() * 20) + 1; // 1 to 20 views
+          for (let k = 0; k < viewCount; k++) {
+            // Pick a random user from the provided list as the viewer
+            const viewerId = userIds[Math.floor(Math.random() * userIds.length)];
+            
+            events.push({
+              user_id: viewerId,
+              event_type: 'view_item',
+              event_data: { 
+                listing_id: listing.id, 
+                category: listing.category,
+                price: listing.price 
+              },
+              // Random time in last 30 days
+              created_at: new Date(Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000)).toISOString()
+            });
+          }
+        }
+      });
+
+      if (events.length > 0) {
+        // Insert in batches of 100 to avoid limits
+        for (let i = 0; i < events.length; i += 100) {
+          const batch = events.slice(i, i + 100);
+          const { error: eventError } = await supabase.from('analytics_events').insert(batch);
+          if (eventError) {
+             console.error('Error inserting analytics batch:', eventError.message);
+          }
+        }
+        console.log(`✅ Generated ${events.length} view events.`);
       }
     }
 
