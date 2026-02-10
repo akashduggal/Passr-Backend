@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { calculateSustainabilityMetrics } = require('../utils/sustainabilityCalculator');
 
 class ListingService {
   // Helper to map DB model (snake_case) to App model (camelCase)
@@ -14,6 +15,8 @@ class ListingService {
       event_date,
       cover_image,
       sold_to_user_id,
+      sustainability_score,
+      eco_impact_data,
       ...rest 
     } = dbListing;
 
@@ -27,7 +30,9 @@ class ListingService {
       livingCommunity: living_community,
       eventDate: event_date,
       coverImage: cover_image,
-      soldToUserId: sold_to_user_id
+      soldToUserId: sold_to_user_id,
+      sustainabilityScore: sustainability_score,
+      ecoImpactData: eco_impact_data
     };
   }
 
@@ -43,6 +48,8 @@ class ListingService {
       eventDate,
       coverImage,
       soldToUserId,
+      sustainabilityScore,
+      ecoImpactData,
       ...rest 
     } = appListing;
 
@@ -55,6 +62,8 @@ class ListingService {
     if (livingCommunity !== undefined) dbListing.living_community = livingCommunity;
     if (coverImage !== undefined) dbListing.cover_image = coverImage;
     if (soldToUserId !== undefined) dbListing.sold_to_user_id = soldToUserId;
+    if (sustainabilityScore !== undefined) dbListing.sustainability_score = sustainabilityScore;
+    if (ecoImpactData !== undefined) dbListing.eco_impact_data = ecoImpactData;
     if (eventDate !== undefined) {
         dbListing.event_date = eventDate === '' ? null : eventDate;
     }
@@ -68,8 +77,13 @@ class ListingService {
    * @returns {Promise<Object>}
    */
   async createListing(listingData) {
+    // Calculate sustainability metrics
+    const { sustainabilityScore, ecoImpactData } = calculateSustainabilityMetrics(listingData);
+
     const dbPayload = this._toDbModel({
       ...listingData,
+      sustainabilityScore,
+      ecoImpactData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
@@ -206,8 +220,20 @@ class ListingService {
    * @returns {Promise<Object>}
    */
   async updateListing(id, updates) {
+    // Recalculate metrics if relevant fields are updated
+    let metricsUpdates = {};
+    if (updates.condition || updates.category || updates.livingCommunity) {
+        const currentListing = await this.getListingById(id);
+        if (currentListing) {
+            const mergedListing = { ...currentListing, ...updates };
+            const { sustainabilityScore, ecoImpactData } = calculateSustainabilityMetrics(mergedListing);
+            metricsUpdates = { sustainabilityScore, ecoImpactData };
+        }
+    }
+
     const appUpdates = {
       ...updates,
+      ...metricsUpdates,
       updatedAt: new Date().toISOString()
     };
     const dbUpdates = this._toDbModel(appUpdates);

@@ -1,6 +1,7 @@
 require('dotenv').config({ path: '../.env' });
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
+const { calculateSustainabilityMetrics } = require('../src/utils/sustainabilityCalculator');
 
 // Try to load .env from project root if not found
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
@@ -119,6 +120,16 @@ async function generateListings() {
           posted_at: new Date().toISOString(),
           expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // Expires in 30 days
         };
+
+        // Calculate sustainability metrics
+        const { sustainabilityScore, ecoImpactData } = calculateSustainabilityMetrics({
+            category: listing.category,
+            condition: listing.condition,
+            livingCommunity: listing.living_community
+        });
+
+        listing.sustainability_score = sustainabilityScore;
+        listing.eco_impact_data = ecoImpactData;
 
         if (category === 'Tickets') {
           const eventDate = new Date();
